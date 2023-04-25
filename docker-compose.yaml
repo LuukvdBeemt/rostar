@@ -7,3 +7,5 @@ services:
     environment:
       - ROSTAR_USER=${ROSTAR_USER}
       - ROSTAR_PASS=${ROSTAR_PASS}
+    volumes:
+      - ./tokens:/tokens
