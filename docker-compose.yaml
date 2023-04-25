@@ -1,0 +1,9 @@
+version: '3'
+
+services:
+  rooster_app:
+    build:
+      context: .
+    environment:
+      - ROSTAR_USER=${ROSTAR_USER}
+      - ROSTAR_PASS=${ROSTAR_PASS}

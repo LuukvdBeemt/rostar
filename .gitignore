@@ -1,0 +1,11 @@
+# Django #
+*.log
+*.pot
+*.pyc
+__pycache__/
+
+# Other #
+venv/
+.env
+token.json
+credentials.json
