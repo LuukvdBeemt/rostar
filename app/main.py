@@ -1,7 +1,5 @@
 from helpers import *
-import csv
-import os
-
+from klas_helper import load_klas_data
 
 WEEKS = 14
     
@@ -17,16 +15,17 @@ def main():
 
 
     # Get list of klassen
-    with open('/data/klassen.csv') as f:
-        csv_reader = csv.DictReader(f, delimiter=',')
-        for klas in csv_reader:
-            printDated(f"Processing {klas['name']}:")
-            processKlas(sessionCookies, service, start, klas['id'], klas['calenderId'])
+    klas_data = load_klas_data()
+    for friendly_name, klas_name_id in klas_data.items():
+        printDated(f"Processing {friendly_name}:")
+        klas_name, klas_id = klas_name_id
+        calendar_id = get_or_create_calendar(service, klas_id, friendly_name)
+        processKlas(sessionCookies, service, start, klas_id, calendar_id)
     
     
 def processKlas(sessionCookies, service, start, id, calenderId):
     for week in range(WEEKS):
-        printDated(f"Week {week}:")
+        printDated(f"\nWeek {week}:")
 
         # The start and end of the current week
         timeMin = start + datetime.timedelta(weeks=week)
@@ -87,7 +86,6 @@ def locationsMatch(newEvent, event):
 def printDated(message):
     now = datetime.datetime.today().replace(microsecond=0)
     print(f"{now.isoformat()}: {message}")
-
 
 if __name__ == '__main__':
     main()
