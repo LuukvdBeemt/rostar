@@ -5,6 +5,7 @@ import requests
 import datetime
 import re
 import os
+from urllib.parse import urljoin
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -29,7 +30,13 @@ def get_calender_service():
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
                 '/data/credentials.json', SCOPES)
-            creds = flow.run_local_server(port=8080, bind_addr='0.0.0.0')
+            callback_port = int(os.environ.get('ROSTAR_OAUTH_PORT', '6080'))
+            creds = flow.run_local_server(
+                host='localhost',
+                bind_addr='0.0.0.0',
+                port=callback_port,
+                open_browser=False,
+            )
         # Save the credentials for the next run
         with open('/data/token.json', 'w') as token:
             token.write(creds.to_json())
@@ -39,15 +46,35 @@ def get_calender_service():
 
 def login(username, password):
     url = 'https://web.eduflexcloud.nl/NLDA/Webmodules/Pages/Login.aspx'
+    session = requests.Session()
+    login_page = session.get(url, timeout=30)
+    login_page.raise_for_status()
+    soup = BeautifulSoup(login_page.text, 'html.parser')
+    form = soup.find('form')
+    if not form:
+        raise RuntimeError('Eduflex login form was not found')
+
     payload = {
-        '__VIEWSTATE': '/wEPDwUKLTM2OTc0NjYzNw9kFgJmD2QWAmYPZBYCAgIPZBYCAgEPZBYCAgEPFgIeC18hSXRlbUNvdW50AgEWAmYPZBYCZg8VAwBCaHR0cHM6Ly93ZWIuZWR1ZmxleGNsb3VkLm5sOjQ0My9OTERBL1dlYm1vZHVsZXMvUGFnZXMvRGVmYXVsdC5hc3B4BEhvbWVkZBNCY0kusbjunVXVb+Ivn6pYqnS4R8oCu4ikuGaHcbes',
+        field['name']: field.get('value', '')
+        for field in form.find_all('input', type='hidden')
+        if field.get('name')
+    }
+    payload = {
+        **payload,
         'ctl00$ctl00$ContentBody$ContentBody$txtUser': username,
         'ctl00$ctl00$ContentBody$ContentBody$txtPass': password,
-        'ctl00$ctl00$ContentBody$ContentBody$Button1': 'Log+in'
+        'ctl00$ctl00$ContentBody$ContentBody$Button1': form.find(
+            'input', {'name': 'ctl00$ctl00$ContentBody$ContentBody$Button1'}
+        ).get('value', 'Log in'),
     }
-    x = requests.post(url, data=payload, allow_redirects=False)
+    action = urljoin(url, form.get('action', url))
+    response = session.post(action, data=payload, allow_redirects=False, timeout=30)
+    if 'Niet valide gebruiker' in response.text:
+        raise RuntimeError('Eduflex login failed: invalid username or password')
+    if response.status_code not in (200, 301, 302, 303, 307, 308):
+        raise RuntimeError(f'Eduflex login failed with HTTP {response.status_code}')
 
-    return x.cookies
+    return session.cookies
 
 
 def getAppointments(sessionCookies, classId, start):

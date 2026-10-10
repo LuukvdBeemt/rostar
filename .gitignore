@@ -9,4 +9,4 @@ venv/
 .env
 token.json
 credentials.json
-klassen.csv
+klassen.json

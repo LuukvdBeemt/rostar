@@ -44,10 +44,8 @@ def processKlas(sessionCookies, service, start, id, calenderId):
         appointments = getAppointments(sessionCookies, id, timeMin)
 
         printDated("Checking for new events...")
-        newEvents = []
-        for appointment in appointments:
-            newEvent = formatEvent(appointment)
-            newEvents.append(newEvent)
+        newEvents = mergeEvents(formatEvent(appointment) for appointment in appointments)
+        for newEvent in newEvents:
 
             if not findEvent(newEvent, events):
                 event = service.events().insert(calendarId=calenderId, body=newEvent).execute()    
@@ -59,6 +57,30 @@ def processKlas(sessionCookies, service, start, id, calenderId):
             if not findEvent(event, newEvents):
                 printDated(f"Deleting calender item with id: {event['id']}")
                 event = service.events().delete(calendarId=calenderId, eventId=event["id"]).execute()    
+
+
+def mergeEvents(events):
+    merged = []
+    for event in sorted(events, key=lambda item: item['start']['dateTime']):
+        if not merged:
+            merged.append(event)
+            continue
+
+        previous = merged[-1]
+        same_details = all(
+            previous.get(field, '') == event.get(field, '')
+            for field in ('summary', 'location', 'description')
+        )
+        previous_end = datetime.datetime.fromisoformat(previous['end']['dateTime'])
+        event_start = datetime.datetime.fromisoformat(event['start']['dateTime'])
+
+        if same_details and event_start - previous_end <= datetime.timedelta(minutes=5):
+            if event['end']['dateTime'] > previous['end']['dateTime']:
+                previous['end'] = event['end']
+        else:
+            merged.append(event)
+
+    return merged
 
 
 def findEvent(newEvent, events):
